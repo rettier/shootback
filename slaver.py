@@ -2,10 +2,12 @@
 # coding=utf-8
 from __future__ import print_function, unicode_literals, division, absolute_import
 
+import ssl
+
 from common_func import *
 
-__author__ = "Aploium <i@z.codes>"
-__website__ = "https://github.com/aploium/shootback"
+__author__ = "Aploium <i@z.codes> et al"
+__website__ = "https://github.com/rettier/shootback"
 
 
 class Slaver:
@@ -25,6 +27,10 @@ class Slaver:
 
     def _connect_master(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        context = ssl.SSLContext()
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.load_verify_locations("cert.pem")
+        sock = context.wrap_socket(sock)
         sock.connect(self.communicate_addr)
 
         self.spare_slaver_pool[sock.getsockname()] = {

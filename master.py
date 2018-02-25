@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 # coding=utf-8
+import ssl
+
+import os
+
 from common_func import *
 import queue
 import atexit
 
 _listening_sockets = []  # for close at exit
-__author__ = "Aploium <i@z.codes>"
-__website__ = "https://github.com/aploium/shootback"
+__author__ = "Aploium <i@z.codes> et al"
+__website__ = "https://github.com/rettier/shootback"
 
 
 @atexit.register
@@ -305,38 +309,53 @@ class Master:
 
     def _listen_slaver(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        context = ssl.SSLContext()
+        context.load_cert_chain("chain.pem")
         try_bind_port(sock, self.communicate_addr)
         sock.listen(10)
         _listening_sockets.append(sock)
         log.info("Listening for slavers: {}".format(
             fmt_addr(self.communicate_addr)))
         while True:
-            conn, addr = sock.accept()
-            self.slaver_pool.append({
-                "addr_slaver": addr,
-                "conn_slaver": conn,
-            })
-            log.info("Got slaver {} Total: {}".format(
-                fmt_addr(addr), len(self.slaver_pool)
-            ))
+            try:
+                conn, addr = sock.accept()
+                sock = context.wrap_socket(sock, server_side=True)
+                self.slaver_pool.append({
+                    "addr_slaver": addr,
+                    "conn_slaver": conn,
+                })
+                log.info("Got slaver {} Total: {}".format(
+                    fmt_addr(addr), len(self.slaver_pool)
+                ))
+            except ssl.SSLError:
+                continue
+            except:
+                traceback.print_exc()
+                os._exit(1)
 
     def _listen_customer(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try_bind_port(sock, self.customer_listen_addr)
         sock.listen(20)
         _listening_sockets.append(sock)
         log.info("Listening for customers: {}".format(
             fmt_addr(self.customer_listen_addr)))
         while True:
-            conn_customer, addr_customer = sock.accept()
-            log.info("Serving customer: {} Total customers: {}".format(
-                addr_customer, self.pending_customers.qsize() + 1
-            ))
+            try:
+                conn_customer, addr_customer = sock.accept()
+                log.info("Serving customer: {} Total customers: {}".format(
+                    addr_customer, self.pending_customers.qsize() + 1
+                ))
 
-            # just put it into the queue,
-            #   let _assign_slaver_daemon() do the else
-            #   don't block this loop
-            self.pending_customers.put((conn_customer, addr_customer))
+                # just put it into the queue,
+                #   let _assign_slaver_daemon() do the else
+                #   don't block this loop
+                self.pending_customers.put((conn_customer, addr_customer))
+            except:
+                traceback.print_exc()
+                os._exit(1)
 
 
 def run_master(communicate_addr, customer_listen_addr):
