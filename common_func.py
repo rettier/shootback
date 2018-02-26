@@ -116,6 +116,7 @@ class SocketBridge:
         self.conn_rd = set()  # record readable-sockets
         self.map = {}  # record sockets pairs
         self.callbacks = {}  # record callbacks
+        self.data_sent = True
 
     def add_conn_pair(self, conn1, conn2, callback=None):
         """
@@ -168,7 +169,7 @@ class SocketBridge:
             # notice: sockets which were closed by remote,
             #   are also regarded as read-ready by select()
             r, w, e = select.select(self.conn_rd, [], [], 0.5)
-
+            self.data_sent = True
             for s in r:  # iter every read-ready or closed sockets
                 try:
                     # here, we use .recv_into() instead of .recv()

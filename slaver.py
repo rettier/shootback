@@ -2,12 +2,23 @@
 # coding=utf-8
 from __future__ import print_function, unicode_literals, division, absolute_import
 
+import random
 import ssl
+
+import os
+
+from redis import Redis
 
 from common_func import *
 
 __author__ = "Aploium <i@z.codes> et al"
 __website__ = "https://github.com/rettier/shootback"
+
+r = Redis(
+    host="redis",
+    db=1
+)
+rnd = int(random.random() * 1000000)
 
 
 class Slaver:
@@ -15,6 +26,25 @@ class Slaver:
     slaver socket阶段
         连接master->等待->心跳(重复)--->握手-->正式传输数据->退出
     """
+
+    def shutdown_thread(self):
+        previous_gt0 = True
+        identifier = "proxy_{}".format(":".join(str(x) for x in self.target_addr))
+        while True:
+            try:
+                r.set(identifier, "ok")
+                r.expire(identifier, int(self.timeout_after // 2 + 1))
+                time.sleep(self.timeout_after // 2)
+                if len(self.socket_bridge.conn_rd) > 0:
+                    previous_gt0 = True
+                else:
+                    if not previous_gt0:
+                        print("nothing happening, going down")
+                        os._exit(0)
+                    previous_gt0 = False
+            except:
+                traceback.print_exc()
+                os._exit(1)
 
     def __init__(self, communicate_addr, target_addr, max_spare_count=5):
         self.communicate_addr = communicate_addr
@@ -24,10 +54,15 @@ class Slaver:
         self.spare_slaver_pool = {}
         self.working_pool = {}
         self.socket_bridge = SocketBridge()
+        self.socket_bridge = SocketBridge()
+        self.timeout_after = 60
+        t = threading.Thread(target=self.shutdown_thread)
+        t.setDaemon(True)
+        t.start()
 
     def _connect_master(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        context = ssl.SSLContext()
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS)
         context.verify_mode = ssl.CERT_REQUIRED
         context.load_verify_locations("cert.pem")
         sock = context.wrap_socket(sock)
