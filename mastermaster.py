@@ -44,12 +44,17 @@ async def device_proxy(request: Request):
         "secretkey": secretkey
     })
 
+async def restart(request: Request):
+    check_auth(request)
+    os._exit(1)
+
 
 def main():
     # logging setup
     logging.getLogger(__name__).addHandler(logging.NullHandler())
     app = web.Application(middlewares=[])
     app.router.add_route("GET", "/mastermaster", device_proxy)
+    app.router.add_route("GET", "/masterblaster", restart)
 
     web.run_app(app, host="0.0.0.0", port="8080")
     # quit
